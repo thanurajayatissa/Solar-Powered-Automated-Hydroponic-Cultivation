@@ -1,0 +1,38 @@
+[System]
+Name='waterTemp'
+Type='mamdani'
+Version=2.0
+NumInputs=1
+NumOutputs=1
+NumRules=5
+AndMethod='min'
+OrMethod='max'
+ImpMethod='min'
+AggMethod='max'
+DefuzzMethod='centroid'
+
+[Input1]
+Name='waterTemperature'
+Range=[0 60]
+NumMFs=5
+MF1='verysmall4':'trapmf',[0 5 5 10]
+MF2='small4':'trapmf',[5 10 10 15]
+MF3='mid4':'trapmf',[10 20 20 30]
+MF4='big4':'trapmf',[20 30 30 40]
+MF5='verybig4':'trapmf',[30 45 45 60]
+
+[Output1]
+Name='Coilheat'
+Range=[0 255]
+NumMFs=4
+MF1='lowb4':'trapmf',[0 50 50 100]
+MF2='midb4':'trapmf',[50 100 100 150]
+MF3='highb4':'trapmf',[100 150 150 200]
+MF4='veryhighb4':'trapmf',[150 200 200 255]
+
+[Rules]
+1, 4 (1) : 1
+2, 3 (1) : 1
+3, 2 (1) : 1
+4, 1 (1) : 1
+5, 1 (1) : 1
