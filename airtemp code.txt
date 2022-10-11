@@ -1,0 +1,216 @@
+#include <Fuzzy.h>
+#include <FuzzyComposition.h>
+#include <FuzzyInput.h>
+#include <FuzzyIO.h>
+#include <FuzzyOutput.h>
+#include <FuzzyRule.h>
+#include <FuzzyRuleAntecedent.h>
+#include <FuzzyRuleConsequent.h>
+#include <FuzzySet.h>
+
+#include <Arduino.h>
+
+#include <Wire.h>
+#include <LiquidCrystal_I2C.h>
+#include <DHT.h>
+
+LiquidCrystal_I2C lcd(0x27,16,2);
+
+#define LDR A0
+#define DHTPIN 7
+#define DHTTYPE DHT11
+#define FAN 6
+
+DHT dht(DHTPIN,DHTTYPE);
+
+
+String T = "Temp_air: ";
+String L = "Light_level:";
+
+
+Fuzzy *fuzzy = new Fuzzy();
+
+void setup() {
+
+  lcd.clear();
+  lcd.init();                      
+  lcd.init();
+  lcd.backlight();
+  lcd.setCursor(0,0);
+  lcd.print("HYDROPONIC");
+  
+  Serial.begin(9600);
+  dht.begin();
+  pinMode(DHTPIN, INPUT);
+  pinMode(LDR, INPUT);
+  pinMode(FAN, OUTPUT);
+  
+  FuzzySet *verysmall = new FuzzySet(0, 0, 0, 5);
+  FuzzySet *small = new FuzzySet(0, 0, 0, 10);
+  FuzzySet *mid = new FuzzySet(5, 10, 10, 15);
+  FuzzySet *big = new FuzzySet(10, 20, 20, 30);
+  FuzzySet *verybig = new FuzzySet(20, 30, 30, 40);
+
+  FuzzySet *lowldr = new FuzzySet(0, 300, 300, 600);
+  FuzzySet *midldr = new FuzzySet(300, 600, 600, 900);
+  FuzzySet *highldr = new FuzzySet(900 ,1200, 1200, 1500);
+
+   
+  FuzzySet *lowb = new FuzzySet(0, 50, 50, 100);
+  FuzzySet *midb = new FuzzySet(50, 100, 100, 150);
+  FuzzySet *highb = new FuzzySet(100, 150, 150, 200);
+  FuzzySet *veryhighb = new FuzzySet(150, 200, 200, 255);
+  
+
+  FuzzyInput *Temperature = new FuzzyInput(1);
+  Temperature->addFuzzySet(verysmall);
+  Temperature->addFuzzySet(small);
+  Temperature->addFuzzySet(mid);
+  Temperature->addFuzzySet(big);
+  Temperature->addFuzzySet(verybig);
+  fuzzy->addFuzzyInput(Temperature);
+
+  FuzzyInput *ldr = new FuzzyInput(2);
+  ldr->addFuzzySet(lowldr);
+  ldr->addFuzzySet(midldr);
+  ldr->addFuzzySet(highldr);
+  fuzzy->addFuzzyInput(ldr); 
+
+  FuzzyOutput *fanSpeed = new FuzzyOutput(1);
+  fanSpeed->addFuzzySet(lowb);
+  fanSpeed->addFuzzySet(midb);
+  fanSpeed->addFuzzySet(highb);
+   fanSpeed->addFuzzySet(veryhighb);
+  fuzzy->addFuzzyOutput(fanSpeed);
+
+  FuzzyRuleAntecedent *ifTemperatureVerySmallAndLdrIsLow = new FuzzyRuleAntecedent();
+  ifTemperatureVerySmallAndLdrIsLow->joinWithAND(verysmall, lowldr);
+  FuzzyRuleConsequent *thenFanSpeedLow = new FuzzyRuleConsequent();
+  thenFanSpeedLow->addOutput(lowb);
+  FuzzyRule *fuzzyRule1 = new FuzzyRule(1, ifTemperatureVerySmallAndLdrIsLow, thenFanSpeedLow);
+  fuzzy->addFuzzyRule(fuzzyRule1);
+
+  FuzzyRuleAntecedent *ifTemperatureVerySmallAndLdrIsMid = new FuzzyRuleAntecedent();
+  ifTemperatureVerySmallAndLdrIsMid->joinWithAND(verysmall, midldr);
+  thenFanSpeedLow->addOutput(lowb);
+  FuzzyRule *fuzzyRule2 = new FuzzyRule(2, ifTemperatureVerySmallAndLdrIsMid, thenFanSpeedLow);
+  fuzzy->addFuzzyRule(fuzzyRule2);
+
+  FuzzyRuleAntecedent *ifTemperatureVerySmallAndLdrIsHigh = new FuzzyRuleAntecedent();
+  ifTemperatureVerySmallAndLdrIsHigh->joinWithAND(verysmall, highldr);
+  FuzzyRuleConsequent *thenFanSpeedMidb = new FuzzyRuleConsequent();
+  thenFanSpeedMidb->addOutput(midb);
+  FuzzyRule *fuzzyRule3 = new FuzzyRule(3, ifTemperatureVerySmallAndLdrIsHigh, thenFanSpeedMidb);
+  fuzzy->addFuzzyRule(fuzzyRule3);
+
+  FuzzyRuleAntecedent *ifTemperatureSmallAndLdrIsLow = new FuzzyRuleAntecedent();
+  ifTemperatureSmallAndLdrIsLow->joinWithAND(small, lowldr);
+  thenFanSpeedLow->addOutput(lowb);
+  FuzzyRule *fuzzyRule4 = new FuzzyRule(4, ifTemperatureSmallAndLdrIsLow, thenFanSpeedLow);
+  fuzzy->addFuzzyRule(fuzzyRule4);
+
+  FuzzyRuleAntecedent *ifTemperatureSmallAndLdrIsMid = new FuzzyRuleAntecedent();
+  ifTemperatureSmallAndLdrIsMid->joinWithAND(small, midldr);
+  thenFanSpeedMidb->addOutput(midb);
+  FuzzyRule *fuzzyRule5 = new FuzzyRule(5, ifTemperatureSmallAndLdrIsMid, thenFanSpeedMidb);
+  fuzzy->addFuzzyRule(fuzzyRule5);
+
+  FuzzyRuleAntecedent *ifTemperatureSmallAndLdrIsHigh = new FuzzyRuleAntecedent();
+  ifTemperatureSmallAndLdrIsHigh->joinWithAND(small, highldr);
+  FuzzyRuleConsequent *thenFanSpeedHigh = new FuzzyRuleConsequent();
+  thenFanSpeedHigh->addOutput(highb);
+  FuzzyRule *fuzzyRule6 = new FuzzyRule(6, ifTemperatureSmallAndLdrIsHigh, thenFanSpeedHigh);
+  fuzzy->addFuzzyRule(fuzzyRule6);
+
+  FuzzyRuleAntecedent *ifTemperatureMidAndLdrIsLow = new FuzzyRuleAntecedent();
+  ifTemperatureMidAndLdrIsLow->joinWithAND(mid, lowldr);
+  thenFanSpeedMidb->addOutput(midb);
+  FuzzyRule *fuzzyRule7 = new FuzzyRule(7, ifTemperatureMidAndLdrIsLow, thenFanSpeedMidb);
+  fuzzy->addFuzzyRule(fuzzyRule7);
+
+  FuzzyRuleAntecedent *ifTemperatureMidAndLdrIsMid = new FuzzyRuleAntecedent();
+  ifTemperatureMidAndLdrIsMid->joinWithAND(mid, midldr);
+  thenFanSpeedHigh->addOutput(highb);
+  FuzzyRule *fuzzyRule8 = new FuzzyRule(8, ifTemperatureMidAndLdrIsMid, thenFanSpeedHigh);
+  fuzzy->addFuzzyRule(fuzzyRule8);
+
+  FuzzyRuleAntecedent *ifTemperatureMidAndLdrIsHigh = new FuzzyRuleAntecedent();
+  ifTemperatureMidAndLdrIsHigh->joinWithAND(mid, highldr);
+  thenFanSpeedHigh->addOutput(highb);
+  FuzzyRule *fuzzyRule9 = new FuzzyRule(9, ifTemperatureMidAndLdrIsHigh, thenFanSpeedHigh);
+  fuzzy->addFuzzyRule(fuzzyRule9);
+
+  FuzzyRuleAntecedent *ifTemperatureBigAndLdrIsLow = new FuzzyRuleAntecedent();
+  ifTemperatureBigAndLdrIsLow->joinWithAND(big, lowldr);
+  thenFanSpeedHigh->addOutput(highb);
+  FuzzyRule *fuzzyRule10 = new FuzzyRule(10, ifTemperatureBigAndLdrIsLow, thenFanSpeedHigh);
+  fuzzy->addFuzzyRule(fuzzyRule10);
+
+  FuzzyRuleAntecedent *ifTemperatureBigAndLdrIsMid = new FuzzyRuleAntecedent();
+  ifTemperatureBigAndLdrIsMid->joinWithAND(big, midldr);
+  thenFanSpeedHigh->addOutput(highb);
+  FuzzyRule *fuzzyRule11 = new FuzzyRule(11, ifTemperatureBigAndLdrIsMid, thenFanSpeedHigh);
+  fuzzy->addFuzzyRule(fuzzyRule11);
+
+  FuzzyRuleAntecedent *ifTemperatureBigAndLdrIsHigh = new FuzzyRuleAntecedent();
+  ifTemperatureBigAndLdrIsHigh->joinWithAND( big, highldr);
+  FuzzyRuleConsequent *thenFanSpeedVeryHigh = new FuzzyRuleConsequent();
+  thenFanSpeedVeryHigh->addOutput(veryhighb);
+  FuzzyRule *fuzzyRule12 = new FuzzyRule(12, ifTemperatureBigAndLdrIsHigh, thenFanSpeedVeryHigh);
+  fuzzy->addFuzzyRule(fuzzyRule12);
+
+  FuzzyRuleAntecedent *ifTemperatureVeryBigAndLdrIsLow = new FuzzyRuleAntecedent();
+  ifTemperatureVeryBigAndLdrIsLow->joinWithAND( verybig, lowldr);
+  thenFanSpeedVeryHigh->addOutput(veryhighb);
+  FuzzyRule *fuzzyRule13 = new FuzzyRule(13, ifTemperatureVeryBigAndLdrIsLow, thenFanSpeedVeryHigh);
+  fuzzy->addFuzzyRule(fuzzyRule13);
+
+  FuzzyRuleAntecedent *ifTemperatureVeryBigAndLdrIsMid = new FuzzyRuleAntecedent();
+  ifTemperatureVeryBigAndLdrIsMid->joinWithAND( verybig, midldr);
+  thenFanSpeedVeryHigh->addOutput(veryhighb);
+  FuzzyRule *fuzzyRule14 = new FuzzyRule(14, ifTemperatureVeryBigAndLdrIsMid, thenFanSpeedVeryHigh);
+  fuzzy->addFuzzyRule(fuzzyRule14);
+
+  FuzzyRuleAntecedent *ifTemperatureVeryBigAndLdrIsHigh = new FuzzyRuleAntecedent();
+  ifTemperatureVeryBigAndLdrIsHigh->joinWithAND( verybig, highldr);
+  thenFanSpeedVeryHigh->addOutput(veryhighb);
+  FuzzyRule *fuzzyRule15 = new FuzzyRule(15, ifTemperatureVeryBigAndLdrIsHigh, thenFanSpeedVeryHigh);
+  fuzzy->addFuzzyRule(fuzzyRule15);
+
+  
+}
+  float temperature() {
+     float temp = dht.readTemperature();
+    return temp;
+}
+
+int intensity() {
+  return analogRead(LDR);
+}
+
+
+
+void loop() {
+
+ 
+  float temp = temperature();
+  int light = intensity();
+     delay(3000);
+     lcd.clear();
+     lcd.setCursor(0,0);
+     lcd.print(T + temp );
+     lcd.setCursor(0,1);
+     lcd.print(L + light );
+     
+   if (temp < 0 || temp > 40 || light>1500 ) return;
+
+  
+  fuzzy->setInput(1, temp); 
+  fuzzy->setInput(2, light); 
+  fuzzy->fuzzify();
+  
+  int output = fuzzy->defuzzify(1); 
+  
+  analogWrite(FAN, output);
+
+}

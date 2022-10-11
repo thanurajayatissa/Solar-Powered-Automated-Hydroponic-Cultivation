@@ -1,0 +1,139 @@
+#include <Fuzzy.h>
+#include <FuzzyComposition.h>
+#include <FuzzyInput.h>
+#include <FuzzyIO.h>
+#include <FuzzyOutput.h>
+#include <FuzzyRule.h>
+#include <FuzzyRuleAntecedent.h>
+#include <FuzzyRuleConsequent.h>
+#include <FuzzySet.h>
+
+#include <Arduino.h>
+#include <Wire.h>
+#include <LiquidCrystal_I2C.h>
+
+LiquidCrystal_I2C lcd(0x27,16,2);
+
+
+#include <OneWire.h>
+#include <DallasTemperature.h>
+
+#define Coil 6
+#define ONE_WIRE_BUS 13
+
+OneWire oneWire(ONE_WIRE_BUS);
+DallasTemperature sensors(&oneWire);
+
+
+Fuzzy *fuzzy = new Fuzzy();
+
+String water = "Temp_water: ";
+ 
+
+void setup() {
+  analogWrite(6,100);
+  sensors.begin();
+  lcd.clear();
+  lcd.init();                      
+  lcd.init();
+  lcd.backlight();
+  lcd.setCursor(0,0);
+  lcd.print("HYDROPONIC");
+  Serial.begin(9600);
+  pinMode(ONE_WIRE_BUS, INPUT);
+  pinMode(Coil, OUTPUT);
+
+  FuzzySet *verysmall4 = new FuzzySet(0, 5, 5, 10);
+  FuzzySet *small4 = new FuzzySet(5, 10, 10, 15);
+  FuzzySet *mid4 = new FuzzySet(10, 20, 20, 30);
+  FuzzySet *big4 = new FuzzySet(20, 30, 30, 40);
+  FuzzySet *verybig4 = new FuzzySet(30, 45, 45, 60);
+
+  
+  FuzzySet *lowb4 = new FuzzySet(0, 50, 50, 100);
+  FuzzySet *midb4 = new FuzzySet(50, 100, 100, 150);
+  FuzzySet *highb4 = new FuzzySet(100, 150, 150, 200);
+  FuzzySet *veryhighb4 = new FuzzySet(150, 200, 200, 255);
+
+  FuzzyInput *waterTemperature = new FuzzyInput(1);
+  waterTemperature->addFuzzySet(verysmall4);
+  waterTemperature->addFuzzySet(small4);
+  waterTemperature->addFuzzySet(mid4);
+  waterTemperature->addFuzzySet(big4);
+  waterTemperature->addFuzzySet(verybig4);
+  fuzzy->addFuzzyInput(waterTemperature);
+
+  FuzzyOutput *Coilheat = new FuzzyOutput(1);
+  Coilheat->addFuzzySet(lowb4);
+  Coilheat->addFuzzySet(midb4);
+  Coilheat->addFuzzySet(highb4);
+  Coilheat->addFuzzySet(veryhighb4);
+  fuzzy->addFuzzyOutput( Coilheat);
+
+  FuzzyRuleAntecedent *ifwaterTemperatureVerySmall4 = new FuzzyRuleAntecedent();
+  ifwaterTemperatureVerySmall4->joinSingle(verysmall4);
+  FuzzyRuleConsequent *thenCoilheatVeryHigh4 = new FuzzyRuleConsequent();
+  thenCoilheatVeryHigh4->addOutput(veryhighb4);
+  FuzzyRule *fuzzyRule1 = new FuzzyRule(1, ifwaterTemperatureVerySmall4, thenCoilheatVeryHigh4);
+  fuzzy->addFuzzyRule(fuzzyRule1);
+  
+  FuzzyRuleAntecedent *ifwaterTemperatureSmall4 = new FuzzyRuleAntecedent();
+  ifwaterTemperatureSmall4->joinSingle(small4);
+  FuzzyRuleConsequent *thenCoilheatHigh4 = new FuzzyRuleConsequent();
+  thenCoilheatHigh4->addOutput(highb4);
+  FuzzyRule *fuzzyRule2 = new FuzzyRule(2, ifwaterTemperatureSmall4, thenCoilheatHigh4);
+  fuzzy->addFuzzyRule(fuzzyRule2);
+
+  
+  FuzzyRuleAntecedent *ifwaterTemperatureMid4= new FuzzyRuleAntecedent();
+  ifwaterTemperatureMid4->joinSingle(mid4);
+  FuzzyRuleConsequent *thenCoilheatMid4 = new FuzzyRuleConsequent();
+  thenCoilheatMid4->addOutput(midb4);
+  FuzzyRule *fuzzyRule3 = new FuzzyRule(3, ifwaterTemperatureMid4, thenCoilheatMid4);
+  fuzzy->addFuzzyRule(fuzzyRule3);
+
+  
+  FuzzyRuleAntecedent *ifwaterTemperatureBig4 = new FuzzyRuleAntecedent();
+  ifwaterTemperatureBig4->joinSingle(big4);
+  FuzzyRuleConsequent *thenCoilheatLow4 = new FuzzyRuleConsequent();
+  thenCoilheatLow4->addOutput(lowb4);
+  FuzzyRule* fuzzyRule4 = new FuzzyRule(4, ifwaterTemperatureBig4, thenCoilheatLow4);
+  fuzzy->addFuzzyRule(fuzzyRule4);
+  
+  
+  FuzzyRuleAntecedent *ifwaterTemperatureVeryBig4 = new FuzzyRuleAntecedent();
+  ifwaterTemperatureVeryBig4->joinSingle(verybig4);
+  thenCoilheatLow4->addOutput(lowb4);
+  FuzzyRule* fuzzyRule5 = new FuzzyRule(5, ifwaterTemperatureVeryBig4, thenCoilheatLow4);
+  fuzzy->addFuzzyRule(fuzzyRule5); 
+}
+
+float waterTemperature() {
+     sensors.requestTemperatures();
+     float Wtemp = sensors.getTempCByIndex(0);
+     return Wtemp;
+}
+
+void loop() {
+  float WT = waterTemperature();
+  delay(3000);
+  
+     lcd.clear();
+     lcd.setCursor(0,0);
+     lcd.print( water + WT );
+     
+     Serial.println( WT );
+     
+  if (WT < 0 || WT > 60 ) return;
+
+  
+  fuzzy->setInput(1, WT);
+
+  fuzzy->fuzzify();
+
+  
+  int output = fuzzy->defuzzify(1); 
+  
+  analogWrite(Coil, output);
+
+}

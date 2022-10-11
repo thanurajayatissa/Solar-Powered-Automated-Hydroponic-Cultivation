@@ -1,0 +1,140 @@
+#include <Fuzzy.h>
+#include <FuzzyComposition.h>
+#include <FuzzyInput.h>
+#include <FuzzyIO.h>
+#include <FuzzyOutput.h>
+#include <FuzzyRule.h>
+#include <FuzzyRuleAntecedent.h>
+#include <FuzzyRuleConsequent.h>
+#include <FuzzySet.h>
+
+#include <Arduino.h>
+
+#include <Wire.h>
+#include <LiquidCrystal_I2C.h>
+
+LiquidCrystal_I2C lcd(0x27,16,2);
+
+int pHSense = A0;
+int samples = 10;
+float adc_resolution = 1024.0;
+
+
+#define Valve1 5
+
+Fuzzy *fuzzy = new Fuzzy();
+
+
+void setup() {
+  lcd.clear();
+  lcd.init();                      
+  lcd.init();
+  lcd.backlight();
+  lcd.setCursor(0,0);
+  lcd.print("HYDROPONIC");
+  
+  Serial.begin(9600);
+
+  pinMode(pHSense, INPUT);
+  pinMode(Valve1, OUTPUT);
+
+  FuzzySet *verysmall2 = new FuzzySet(0, 0, 0, 2);
+  FuzzySet *small2 = new FuzzySet(2, 3, 3, 4);
+  FuzzySet *mid2 = new FuzzySet(2, 6, 6, 10);
+  FuzzySet *big2 = new FuzzySet(4, 8, 8, 12);
+  FuzzySet *verybig2 = new FuzzySet(10, 12, 12, 14);
+
+   
+  FuzzySet *lowb2 = new FuzzySet(0, 50, 50, 100);
+  FuzzySet *midb2 = new FuzzySet(50, 100, 100, 150);
+  FuzzySet *highb2 = new FuzzySet(100, 150, 150, 200);
+  FuzzySet *veryhighb2 = new FuzzySet(150, 200, 200, 255);
+
+
+  FuzzyInput *pHstate = new FuzzyInput(1);
+  pHstate->addFuzzySet(verysmall2);
+  pHstate->addFuzzySet(small2);
+  pHstate->addFuzzySet(mid2);
+  pHstate->addFuzzySet(big2);
+  pHstate->addFuzzySet(verybig2);
+  fuzzy->addFuzzyInput(pHstate);
+
+  FuzzyOutput *AlbertValve = new FuzzyOutput(1);
+  AlbertValve->addFuzzySet(lowb2);
+  AlbertValve->addFuzzySet(midb2);
+  AlbertValve->addFuzzySet(highb2);
+  AlbertValve->addFuzzySet(veryhighb2);
+  fuzzy->addFuzzyOutput(AlbertValve);
+
+  FuzzyRuleAntecedent *ifpHstateVerySmall2 = new FuzzyRuleAntecedent();
+  ifpHstateVerySmall2->joinSingle(verysmall2);
+  FuzzyRuleConsequent *thenAlbertValveLow2 = new FuzzyRuleConsequent();
+  thenAlbertValveLow2->addOutput(lowb2);
+  FuzzyRule *fuzzyRule1 = new FuzzyRule(1, ifpHstateVerySmall2, thenAlbertValveLow2);
+  fuzzy->addFuzzyRule(fuzzyRule1);
+  
+  FuzzyRuleAntecedent *ifpHstateSmall2 = new FuzzyRuleAntecedent();
+  ifpHstateSmall2->joinSingle(small2);
+  thenAlbertValveLow2->addOutput(lowb2);
+  FuzzyRule *fuzzyRule2 = new FuzzyRule(2, ifpHstateSmall2, thenAlbertValveLow2);
+  fuzzy->addFuzzyRule(fuzzyRule2);
+
+  
+ 
+  FuzzyRuleAntecedent *ifpHstateMid2 = new FuzzyRuleAntecedent();
+  ifpHstateMid2->joinSingle(mid2);
+  FuzzyRuleConsequent *thenAlbertValveMid2 = new FuzzyRuleConsequent();
+  thenAlbertValveMid2->addOutput(midb2);
+  FuzzyRule *fuzzyRule3 = new FuzzyRule(3, ifpHstateMid2, thenAlbertValveMid2);
+  fuzzy->addFuzzyRule(fuzzyRule3);
+
+  
+  FuzzyRuleAntecedent *ifpHstateBig2 = new FuzzyRuleAntecedent();
+  ifpHstateBig2->joinSingle(big2);
+  FuzzyRuleConsequent *thenAlbertValveHigh2 = new FuzzyRuleConsequent();
+  thenAlbertValveHigh2->addOutput(highb2);
+  FuzzyRule* fuzzyRule4 = new FuzzyRule(4, ifpHstateBig2, thenAlbertValveHigh2);
+  fuzzy->addFuzzyRule(fuzzyRule4);
+  
+  
+  FuzzyRuleAntecedent *ifpHstateVeryBig2 = new FuzzyRuleAntecedent();
+  ifpHstateVeryBig2->joinSingle(verybig2);
+  FuzzyRuleConsequent *thenAlbertValveVeryHigh2 = new FuzzyRuleConsequent();
+  thenAlbertValveVeryHigh2->addOutput(veryhighb2);
+  FuzzyRule* fuzzyRule5 = new FuzzyRule(5, ifpHstateVeryBig2, thenAlbertValveHigh2);
+  fuzzy->addFuzzyRule(fuzzyRule5); 
+
+}
+float ph (float voltage) {
+  return 7 + ((2.5 - voltage) / 0.18);
+
+}
+
+void loop() {
+   int measurings=0;
+  for (int i = 0; i < samples; i++)
+  {
+    measurings += analogRead(pHSense);
+    delay(10);
+  }
+
+  float voltage = 5 / adc_resolution * measurings/samples;
+
+    lcd.clear();
+    lcd.setCursor(0,0);
+    lcd.print("pH= ");
+    lcd.print(ph(voltage));
+   
+if (ph(voltage) < 0 || ph(voltage) > 14 ) return;
+
+  
+  fuzzy->setInput(1, ph(voltage));
+
+  fuzzy->fuzzify();
+
+  
+  int output = fuzzy->defuzzify(1); 
+  
+  analogWrite(Valve1, output);
+
+}
